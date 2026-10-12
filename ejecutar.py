@@ -187,6 +187,11 @@ def safe_target(name: str) -> Path | None:
         return None
     p = (ROOT / name).resolve()
     src = SRC_DIR.resolve()
+    if not (p.is_relative_to(src) and p.is_file()):
+        base = Path(name).name
+        candidates = [f for f in src.rglob(base) if f.is_file() and f.suffix.lower() in ALLOWED_EXT]
+        if len(candidates) == 1:
+            p = candidates[0]
     if p.is_relative_to(src) and p.suffix.lower() in ALLOWED_EXT and p.is_file():
         if is_target_protected(p):
             print(f"[SEGURIDAD HOST] Modificacion denegada: '{p.name}' es un archivo protegido.")

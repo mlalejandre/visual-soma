@@ -19,6 +19,7 @@ EXCLUDED_DIRS = {
     "__pycache__",
     "build",
     "dist",
+    "tools",
 }
 
 # Archivos que pueden contener credenciales o secretos.
@@ -228,6 +229,12 @@ def generate_report() -> None:
 
         if not is_probably_text(path):
             output.append("[ARCHIVO BINARIO - CONTENIDO OMITIDO]")
+            output.append("")
+            continue
+
+        # Omitir el contenido de los generadores de estructura
+        if path.name.startswith("estructura") and path.suffix == ".py":
+            output.append("[CONTENIDO OMITIDO - SCRIPT DE ESTRUCTURA]")
             output.append("")
             continue
 

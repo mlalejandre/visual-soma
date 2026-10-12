@@ -92,7 +92,7 @@ void pmm_init(uint32_t mb_magic, uint32_t mb_info_addr)
 {
     /* 1. Por defecto, marcar toda la memoria como ocupada/reservada */
     memset(pmm_bitmap, 0xFF, sizeof(pmm_bitmap));
-    pmm_total_frames = PMM_MAX_FRAMES;
+    pmm_total_frames = 0; /* ramstat: se calcula con el techo real de RAM */
     pmm_used_frames  = PMM_MAX_FRAMES;
 
     int parsed_mmap = 0;
@@ -128,6 +128,17 @@ void pmm_init(uint32_t mb_magic, uint32_t mb_info_addr)
 
     /* 3. Blindaje critico: los primeros 16 MiB quedan estrictamente reservados */
     mark_region_used(0, PMM_RESERVED_LOWER);
+
+    /* ramstat: sin mapa valido, usar el maximo; luego recontar usados
+     * solo dentro de la RAM real (los marcos por encima no existen). */
+    if (pmm_total_frames == 0) pmm_total_frames = PMM_MAX_FRAMES;
+    {
+        size_t real_used = 0;
+        for (size_t f = 0; f < pmm_total_frames; ++f) {
+            if (test_bit(f)) real_used++;
+        }
+        pmm_used_frames = real_used;
+    }
 
     kprint("PMM: Inicializado (Bitmap Allocator 4 KiB)\n");
     pmm_dump_stats();

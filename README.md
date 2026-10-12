@@ -1,331 +1,123 @@
-# 🧠 SOMA v0.2 — AI-Native Multi-Agent Operating System
+# 🧠 SOMA v0.2 — AI-Native Operating System with Cosmic GUI
 
-![Architecture](https://img.shields.io/badge/Architecture-x86__64%20%7C%20AArch64-blue?style=for-the-badge)
-![Language](https://img.shields.io/badge/Language-Freestanding%20C%20%7C%20ASM-green?style=for-the-badge)
-![Storage](https://img.shields.io/badge/Storage-SOMAFS02%20%2816%20KiB%29-orange?style=for-the-badge)
-![AI](https://img.shields.io/badge/AI-Hierarchical%20ReAct%20Agents-purple?style=for-the-badge)
-![License](https://img.shields.io/badge/License-MIT-brightgreen?style=for-the-badge)
+SOMA (Sistema Operativo Multi-Agente) es un sistema operativo experimental de 64 bits para arquitecturas x86_64 y AArch64 desarrollado desde cero en C freestanding y ensamblador, sin Linux, sin glibc ni dependencias externas.
 
-**SOMA** (*Sistema Operativo Multi-Agente*) es un sistema operativo experimental de 64 bits desarrollado desde cero en **C freestanding y ensamblador**, sin Linux, glibc, POSIX ni dependencias de runtime de propósito general.
-
-El objetivo de SOMA es explorar una arquitectura **AI-native**, donde agentes basados en LLM puedan interactuar con un entorno operativo controlado por el propio kernel, con acceso directo a los subsistemas de memoria, almacenamiento, red y ejecución.
-
-> ⚠️ **Estado del proyecto:** experimental. SOMA está orientado a investigación, prototipado y experimentación con sistemas operativos y agentes autónomos.
+Diseñado desde el hardware como entorno nativo para agentes de Inteligencia Artificial, SOMA integra un escritorio gráfico TrueColor acelerado en Ring 0, multitarea multiventana, pila de red TCP/IP y almacenamiento persistente.
 
 ---
 
-## ✨ Características principales
+## 🌌 Entorno de Escritorio Gráfico (Her-Aura Desktop)
 
-### 🤖 Inteligencia artificial y orquestación multiagente
+SOMA incorpora un servidor visual con doble búfer, recorte por tijera (clipping), optimización por rectángulos de daño y mezcla alfa con soporte para resoluciones HD (1280×720) y Full HD (1920×1080) a 32 bpp TrueColor.
 
-- **Kernel ReAct:** bucle de razonamiento/acción integrado en el entorno del sistema que permite ejecutar herramientas y evaluar telemetría.
-- **Orquestación jerárquica:** el agente principal (`soma`) puede delegar tareas especializadas a otros agentes, como `buscador`.
-- **Blackboard IPC:** intercambio de contexto entre agentes mediante una pizarra compartida persistente en `/agent/blackboard.txt`.
-- **Herramientas nativas:** los agentes interactúan con funcionalidades del sistema mediante comandos y primitivas expuestas por el kernel.
+    +------------------------------------------------------------------------+
+    |                        SOMA HER-AURA DESKTOP                           |
+    |                                                                        |
+    |        [Browser]          [Notepad]          [Files]         [Paint]   |
+    |             \                 |                 |            /         |
+    |              v                 v                 v          v          |
+    |        +------------------------------------------------------+        |
+    |        |        ANILLO ORBITAL DE ACRECIÓN Y HORIZONTE        |        |
+    |        |            * Vórtice Central Cósmico (30 FPS)        |        |
+    |        |     (Entrada Reactiva en Vivo / Streaming de LLM)    |        |
+    |        +------------------------------------------------------+        |
+    |              ^                 ^                 ^          ^          |
+    |             /                 |                 |           \          |
+    |        [Terminal]         [MemView]         [Layout]     [Agentes]     |
+    |                                                                        |
+    |  soma> analiza el estado del sistema y genera un informe_              |
+    +------------------------------------------------------------------------+
 
-### 🔍 Motor de búsqueda semántica bare-metal
-
-- **BM25 / TF-IDF:** motor de recuperación de información implementado en C para buscar contenido almacenado en el sistema de archivos.
-- **Normalización textual:** soporte para normalización UTF-8 y comparación de términos con normalización de diacríticos.
-- **Búsqueda sobre memoria persistente:** integración con el almacenamiento de SOMA.
-
-### 🌐 Networking y servicios Web
-
-- **VirtIO-NET:** controlador de red para entornos virtualizados mediante QEMU.
-- **Ethernet, ARP e IPv4:** implementación de los componentes fundamentales de la pila de red.
-- **ICMP, UDP y TCP:** soporte para comunicación y diagnóstico.
-- **HTTPD:** servidor HTTP integrado en el sistema.
-- **API REST:** endpoints JSON para exponer telemetría y estado del sistema.
-- **Dashboard Web:** interfaz HTML para observar el estado operativo desde el host.
-
-### 💾 Almacenamiento y memoria
-
-- **SOMAFS02:** sistema de archivos experimental sobre VirtIO-BLK.
-- **Hasta 16 KiB por archivo:** límite definido por el formato actual.
-- **Hasta 64 inodos dinámicos:** capacidad correspondiente a la implementación actual.
-- **Espacios de trabajo:** separación lógica mediante rutas como `/workspace/` y `/mis_archivos/`.
-- **KHeap:** asignador dinámico utilizado por el kernel y sus subsistemas.
-- **Memoria virtual:** soporte de paginación de cuatro niveles en x86_64.
+- Escritorio Interactivo: Vórtice procedural de partículas a 30 FPS con renderizado de acreción y pulsos luminosos reactivos al razonamiento del LLM.
+- Dock Orbital Dinámico: Los iconos orbitan alrededor del vórtice central y pueden ser absorbidos hacia el horizonte de sucesos mediante física en coma fija (16.8).
+- Gestor Multiventana Flotante: Mueve, redimensiona interactivamente por los bordes (drag & resize), apila en profundidad Z y conmuta entre ventanas abiertas.
+- Motor Tipográfico e Iconográfico Vectorial: Renderizado de curvas de Bézier y máscaras antialiasing de 8 sub-muestras por píxel (formato TrueType TTF sin librerías externas), junto a una colección de iconos vectoriales procedurales.
 
 ---
 
-## 🏗️ Arquitectura
+## 🖥️ Suite de Aplicaciones Gráficas Nativas
 
-```text
-┌───────────────────────────────────────────────────────────────┐
-│                    SOMA BARE-METAL KERNEL                    │
-│                                                               │
-│  ┌───────────────────┐       ┌─────────────────────────────┐ │
-│  │   Interactive CLI │◄─────►│ Autonomous ReAct            │ │
-│  │   UTF-8 / COM1    │       │ Orchestrator: soma          │ │
-│  └─────────┬─────────┘       └──────────────┬──────────────┘ │
-│            │                                │                 │
-│            │                    delegate    │                 │
-│            │                                ▼                 │
-│  ┌─────────▼─────────┐       ┌─────────────────────────────┐ │
-│  │   SOMAFS / RamFS  │◄─────►│ Research Agent              │ │
-│  │ /workspace /mem   │       │ buscador / Blackboard IPC   │ │
-│  └─────────┬─────────┘       └──────────────┬──────────────┘ │
-│            │                                                  │
-│  ┌─────────▼───────────────────────────────────────────────┐ │
-│  │       BM25 / TF-IDF + KHeap + Memory Management         │ │
-│  └───────────────────────────┬─────────────────────────────┘ │
-│                              │                                │
-│  ┌───────────────────────────▼─────────────────────────────┐ │
-│  │                 Networking / HTTPD                      │ │
-│  │             TCP · UDP · IPv4 · ARP · ICMP              │ │
-│  └───────────────────────────┬─────────────────────────────┘ │
-│                              │                                │
-│             ┌────────────────▼────────────────┐               │
-│             │       VirtIO-NET / VirtIO-BLK   │               │
-│             └────────────────┬────────────────┘               │
-└──────────────────────────────┼────────────────────────────────┘
-                               │ VirtIO Queues
-                               ▼
-┌───────────────────────────────────────────────────────────────┐
-│                           QEMU                                │
-│                 Host port forwarding :8090                   │
-└──────────────────────────────┬────────────────────────────────┘
-                               │ SLIRP NAT / LAN
-                               ▼
-┌───────────────────────────────────────────────────────────────┐
-│                       LAN / AI Server                         │
-│                      llama.cpp / API                          │
-│                  192.168.1.200:8087                           │
-└───────────────────────────────────────────────────────────────┘
-```
+- SOMA Browser: Navegador visual con motor de renderizado HTML/CSS, imágenes locales/remotas BMP/PPM y adaptador para JavaScript reactivo.
+- SOMA Paint: Editor bitmap sobre lienzo de 80×60 con lápiz, pincel, figuras geométricas, relleno por inundación (flood fill), paleta y guardado BMP a disco.
+- SOMA File Manager: Explorador de archivos para SOMAFS02 con clasificación por tipo, tamaño, metadatos y apertura directa.
+- SOMA Notepad: Editor de texto gráfico con seguimiento y volcado en vivo (live streaming) de los archivos creados por los agentes.
+- SOMA Memory View: Visor en árbol del grafo de conocimiento persistente, la pizarra compartida (Blackboard) y la memoria episódica.
+- Document Layout: Motor de maquetación editorial para previsualizar documentos estructurados bajo el estándar #SOMA-LAYOUT v1.
+- Terminal Gráfica: Consola interactiva con emulación ANSI, historial persistente, autocompletado y tuberías (| , > , && , ||).
 
 ---
 
-## 🚀 Quickstart
+## 🤖 Jerarquía y Orquestación Multi-Agente
 
-SOMA utiliza Docker para proporcionar un entorno reproducible de compilación cruzada y QEMU para ejecutar el sistema virtualizado.
+SOMA ejecuta un bucle cognitivo ReAct (Reason + Act) con agentes especializados:
 
-### 1. Clonar el repositorio
-```bash
-git clone https://github.com/mlalejandre/soma.git
-cd soma
-```
-
-### 2. Compilar y ejecutar
-```bash
-python3 ejecutar.py
-```
-El script prepara el entorno de compilación, construye los componentes C/ASM, genera la imagen de arranque y lanza QEMU.
-
-### 3. Abrir el Dashboard
-Una vez iniciado QEMU:
-```text
-http://localhost:8090/
-```
-El puerto 8090 corresponde al forwarding configurado en el host; el servidor HTTP interno utiliza el puerto 80.
+- soma: Orquestador superior. Descompone objetivos complejos, delega tareas especializadas y sintetiza dictámenes finales.
+- mayordomo: Agente operativo determinista y de baja latencia. Ejecuta consultas de memoria, operaciones de VFS, búsquedas y archivos sin consumir tokens LLM.
+- buscador: Especialista en investigación externa web (DuckDuckGo / proxy HTTP) y recuperación semántica interna mediante algoritmo BM25 / TF-IDF.
+- maquetador: Especialista editorial. Transforma síntesis e informes en documentos maquetados con jerarquía visual estructurada.
+- Blackboard IPC: Pizarra persistente compartida (/agent/blackboard.txt) para consenso e intercambio de contexto entre agentes.
 
 ---
 
-## 💻 Shell soma>
+## 🌐 Red y Servicios Web en Ring 0
 
-Una vez arrancado el sistema, SOMA proporciona una shell interactiva orientada a operaciones del kernel, almacenamiento, red y agentes.
-
-### 🤖 Multiagente
-
-| Comando | Descripción |
-| :--- | :--- |
-| `soma <misión>` | Asigna un objetivo al orquestador principal. |
-| `delegate <agente> "<misión>"` | Delega una tarea a un agente especializado. |
-| `bm25 <término>` | Busca información relevante en el almacenamiento persistente. |
-
-### 🌐 Sistema y red
-
-| Comando | Descripción |
-| :--- | :--- |
-| `somafetch` | Muestra información y telemetría del sistema. |
-| `httpd` | Muestra el estado del servidor HTTP. |
-| `ps` / `threads` | Muestra tareas y threads activos. |
-| `ping <ip>` | Ejecuta una prueba ICMP. |
-| `curl <url>` | Realiza una petición HTTP mediante la pila de red. |
-
-### 💾 Sistema de archivos
-
-| Comando | Descripción |
-| :--- | :--- |
-| `ls -a /workspace` | Lista el contenido del workspace. |
-| `cat <archivo>` | Muestra el contenido de un archivo. |
-| `nano <archivo>` | Abre el editor de texto interactivo. |
+- VirtIO-NET: Controlador de red virtualizado para entornos QEMU (PCI legacy en x86_64, MMIO en AArch64).
+- Pila TCP/IP Nativa: Ethernet, ARP dinámico, IPv4, ICMP (Ping), UDP y TCP de flujo confiable con retransmisión por temporizadores.
+- Servidor HTTPD: Servidor web integrado en Ring 0 sirviendo un Dashboard interactivo y API REST en el puerto 80 (mapeado a http://localhost:8090/).
 
 ---
 
-## 🤝 Ejemplo: coordinación autónoma
+## 💾 Almacenamiento Persistente (SOMAFS02)
 
-```text
-soma> investiga los principios de la computación cuántica y guarda tus notas
-```
-
-### Flujo conceptual:
-```text
-Usuario
-   │
-   ▼
- soma
-   │
-   ├── analiza el objetivo
-   │
-   ├── delega ───────────────► buscador
-   │                             │
-   │                             ├── search
-   │                             ├── curl
-   │                             └── sintetiza información
-   │                                      │
-   │                                      ▼
-   │                              Blackboard IPC
-   │                                      │
-   ◄──────────────────────────────────────┘
-   │
-   ├── lee el contexto compartido
-   │
-   ├── genera el informe
-   │
-   └── write
-          │
-          ▼
- /workspace/notas_quantica.txt
-```
-
-### Flujo paso a paso:
-1. `soma` recibe el objetivo y determina qué información necesita.
-2. El orquestador delega la investigación al agente `buscador`.
-3. `buscador` utiliza las herramientas disponibles para recuperar información.
-4. El agente sintetiza los resultados y los publica en el Blackboard.
-5. `soma` recupera el contexto compartido.
-6. El orquestador genera el resultado final.
-7. El informe queda persistido en `/workspace/notas_quantica.txt`.
-8. El resultado puede consultarse posteriormente mediante la shell o el Dashboard Web.
+- VirtIO-BLK: Controlador de bloques de bajo nivel sobre disco físico virtual de 16 MiB.
+- SOMAFS02: Sistema de archivos con 64 inodos, hasta 16 KiB por archivo, sincronización transaccional (dirty tracking) y partición de fábrica.
+- SRCFS: Empaquetador que almacena el código fuente del kernel en sectores reservados para auto-inspección en tiempo de ejecución.
+- Singularity Loop: Mecanismo donde el agente puede proponer parches de código C (SEARCH / REPLACE), reiniciar en modo prueba canaria y validar o revertir el parche automáticamente.
 
 ---
 
-## 🧩 Componentes principales
+## 🚀 Puesta en Marcha
 
-```text
-kernel/
-├── arch/          # Arquitecturas
-├── boot/          # Arranque
-├── drivers/       # VirtIO y dispositivos
-├── mm/            # Gestión de memoria
-├── net/           # Networking
-├── fs/            # SOMAFS / RamFS
-├── ai/            # Agentes y orquestación
-├── search/        # BM25 / TF-IDF
-└── httpd/         # Servidor HTTP / API
-```
-La estructura es conceptual y puede variar según la versión del árbol de código.
+1. Clonar el repositorio:
+    git clone https://github.com/tu-usuario/soma.git
+    cd soma
 
----
+2. Compilar y arrancar el entorno gráfico:
+    python3 ejecutar.py
 
-## 🔐 Modelo de seguridad
+   (Para arquitectura ARM64 añadir: python3 ejecutar.py --arch aarch64)
 
-SOMA ejecuta gran parte de su funcionalidad privilegiada en **Ring 0** dentro del entorno virtualizado.
+3. Dashboard Web:
+    Abrir en el navegador del host: http://localhost:8090/
 
-Esto permite:
-- Acceso directo a primitivas del kernel.
-- Control sobre memoria y dispositivos virtualizados.
-- Integración estrecha entre IA y sistema operativo.
-- Una arquitectura con pocas capas de abstracción entre agentes y kernel.
-
-Sin embargo:
-- Ring 0 proporciona privilegios, no aislamiento de seguridad entre agentes.
-- Por ello, los agentes con capacidades privilegiadas deben considerarse confiables.
-- **No ejecutes agentes, modelos, código o entradas no confiables en una instancia de SOMA conectada a una red sensible.**
+4. Controles básicos de la interfaz:
+    - Escribir en cualquier momento: el orquestador captura el texto directamente.
+    - Tecla X: alterna la visibilidad del dock orbital de iconos.
+    - ESC: cierra o minimiza la ventana activa hacia el escritorio cósmico.
 
 ---
 
-## 🧪 Entorno de desarrollo
+## 📂 Estructura del Proyecto
 
-### Requisitos
-- Linux, macOS o Windows con Docker.
-- Docker / Docker Compose.
-- Python 3.
-- QEMU.
-- Toolchain compatible con x86_64 y/o AArch64.
-
-### Integración con un modelo local
-```text
-llama.cpp
-    │
-    ▼
-192.168.1.200:8087
-    │
-    ▼
-  SOMA
-```
-La dirección IP anterior representa una configuración de laboratorio y puede cambiarse según el entorno.
-
----
-
-## 📊 Objetivos del proyecto
-
-```text
-                 ┌────────────────────┐
-                 │ Artificial          │
-                 │ Intelligence        │
-                 └─────────┬──────────┘
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │         SOMA            │
-              │   AI-Native OS Layer    │
-              └────────────┬────────────┘
-                           │
-             ┌─────────────┴─────────────┐
-             ▼                           ▼
-   ┌──────────────────┐        ┌──────────────────┐
-   │ Operating        │        │ Autonomous       │
-   │ Systems          │        │ Agents           │
-   └──────────────────┘        └──────────────────┘
-```
-
-El proyecto investiga, entre otros temas:
-- Sistemas operativos especializados para agentes.
-- Tool use a nivel de sistema.
-- Orquestación multiagente.
-- Memoria persistente para agentes.
-- Recuperación de información integrada en el sistema.
-- Networking nativo para agentes autónomos.
-- Interfaces humano-IA integradas en el sistema operativo.
-- Arquitecturas AI-native sin depender de un sistema operativo convencional.
-
----
-
-## 📌 Estado del proyecto
-
-**SOMA v0.2 — Experimental**  
-Las APIs, estructuras internas, protocolos y formatos de almacenamiento pueden cambiar entre versiones. No se garantiza compatibilidad binaria, estabilidad de ABI ni compatibilidad hacia atrás.
+    soma/
+    ├── Dockerfile          # Toolchain de compilación cruzada reproducible
+    ├── Makefile            # Reglas de construcción para x86_64 y AArch64
+    ├── ejecutar.py         # Runner maestro con soporte multi-arquitectura
+    ├── grub/               # Configuración de arranque GRUB Multiboot
+    ├── src/
+    │   ├── arch/           # HAL: arranque, IDT, VMM (paginación), PMM
+    │   ├── core/           # Kernel, planificador KThreads, mutex, heap
+    │   ├── drivers/        # VirtIO-NET, VirtIO-BLK, Framebuffer BGA, Ratón
+    │   ├── fs/             # SOMAFS02, VFS virtual, BM25 y SRCFS
+    │   ├── net/            # Pila IP, TCP, UDP, ARP, DNS, cliente HTTP y HTTPD
+    │   ├── ui/             # Escritorio Her-Aura, compositor 2D y consola
+    │   ├── apps/           # Browser, Paint, Notepad, File Manager, MemView, Layout
+    │   ├── fonts/          # Rasterizador vectorial TrueType e iconos
+    │   └── agent/          # Agentes ReAct, integración LLM y shell
+    └── docs/               # Especificaciones y diseño del sistema
 
 ---
 
 ## 📄 Licencia
 
-SOMA se distribuye bajo la licencia **MIT**. Consulta `LICENSE` para conocer los términos completos.
-
----
-
-## 🤝 Contribuir
-
-Las contribuciones son bienvenidas. Antes de abrir un Pull Request:
-- Comprueba que el proyecto compila.
-- Ejecuta las pruebas disponibles.
-- Documenta cambios en interfaces o formatos.
-- Evita introducir dependencias innecesarias en el kernel.
-- Mantén separadas las capas de arquitectura, drivers, red, FS y agentes.
-
-Para cambios importantes, documenta:
-- Problema y motivación.
-- Diseño propuesto.
-- Impacto sobre ABI/API, memoria y rendimiento.
-- Compatibilidad con x86_64 y AArch64.
-
----
-
-## ⭐ Filosofía
-
-> *Un sistema operativo no debería limitarse a ejecutar agentes.*  
-> *También puede convertirse en el entorno operativo nativo de esos agentes.*  
-> **SOMA explora esa posibilidad.**
+Distribuido bajo licencia MIT. Consulta el archivo LICENSE para más detalles.

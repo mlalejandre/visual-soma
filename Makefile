@@ -13,7 +13,7 @@ CFLAGS = -DPLATFORM_$(PLATFORM) -march=armv8-a -ffreestanding -O2 -Wall -Wextra 
 endif
 
 BUILD = build/$(ARCH)
-CFLAGS += -Isrc -Isrc/arch/$(ARCH)
+CFLAGS += -Isrc -Isrc/core -Isrc/drivers -Isrc/fs -Isrc/net -Isrc/ui -Isrc/apps -Isrc/agent -Isrc/arch/$(ARCH)
 
 OBJS_ARCH = \
 	$(BUILD)/boot.o \
@@ -34,6 +34,7 @@ OBJS_CORE = \
 	$(BUILD)/mutex.o \
 	$(BUILD)/kernel.o \
 	$(BUILD)/mem.o \
+	$(BUILD)/ramstat.o \
 	$(BUILD)/console.o \
 	$(BUILD)/virtio_net.o \
 	$(BUILD)/net.o \
@@ -50,10 +51,22 @@ OBJS_CORE = \
 	$(BUILD)/nano.o \
 	$(BUILD)/agent.o \
 	$(BUILD)/shell.o \
-	$(BUILD)/httpd.o
+	$(BUILD)/httpd.o \
+	$(BUILD)/fb.o \
+	$(BUILD)/gui_font.o \
+	$(BUILD)/mouse.o \
+	$(BUILD)/gui.o \
+	$(BUILD)/browser.o \
+	$(BUILD)/image.o \
+	$(BUILD)/imgview.o \
+	$(BUILD)/fm.o \
+	$(BUILD)/notepad.o \
+	$(BUILD)/memview.o $(BUILD)/js_runtime.o \
+	$(BUILD)/layout.o \
+	$(BUILD)/paint.o
 
 OBJS = $(OBJS_ARCH) $(OBJS_CORE)
-HEADERS = $(wildcard src/*.h) $(wildcard src/arch/$(ARCH)/*.h)
+HEADERS = $(wildcard src/*.h) $(wildcard src/*/*.h) $(wildcard src/cursors/*.h) $(wildcard src/fonts/*.h) $(wildcard src/icons/*.h) $(wildcard src/arch/$(ARCH)/*.h)
 
 all: $(BUILD)/soma.iso
 
@@ -67,6 +80,27 @@ $(BUILD)/switch.o: src/arch/$(ARCH)/switch.s | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/%.o: src/arch/$(ARCH)/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: src/core/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: src/drivers/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: src/fs/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: src/net/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: src/ui/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: src/apps/%.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: src/agent/%.c $(HEADERS) | $(BUILD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD)/%.o: src/%.c $(HEADERS) | $(BUILD)

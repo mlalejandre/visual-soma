@@ -36,10 +36,13 @@ SECTIONS
     }
 
     __kernel_image_end = .;
-    ASSERT(__kernel_image_end <= 0x00200000,
-           "ERROR: la imagen del kernel (con BSS) invade la virtqueue de 2 MiB")
+    /* SOMA_VIRTQUEUE_MOVED: virtqueue movida de 0x00220000 a 0x00800000 */
+    /* La imagen SOMA actual ocupa mas de 2 MiB; reserva una zona posterior
+       para la cola VirtIO. boot.s mantiene el mapeo identity de memoria RAM. */
+    ASSERT(__kernel_image_end <= 0x00800000,
+           "ERROR: la imagen del kernel (con BSS) invade la virtqueue reubicada")
 
-    .virtio_queue 0x00200000 (NOLOAD) :
+    .virtio_queue 0x00800000 (NOLOAD) :
     ALIGN(4096)
     {
         KEEP(*(.virtio_queue))

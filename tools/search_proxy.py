@@ -1,192 +1,104 @@
 #!/usr/bin/env python3
-# search_proxy.py — Proxy HTTP de búsqueda web universal y totipotencial para SOMA.
 from __future__ import annotations
 
 import argparse
 import html
-import json
-import math
+import io
+import os
 import re
-import sys
+import subprocess
+import tempfile
 import threading
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 _proxy_server = None
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+IMG_CACHE: dict[str, bytes] = {}
 
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-
-STOP_WORDS = {
-    "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "a", "al", "en",
-    "con", "por", "para", "que", "se", "su", "sus", "y", "o", "u", "e", "es", "son",
-    "fue", "era", "ha", "han", "este", "esta", "estos", "estas", "como", "cuando", "donde",
-    "quien", "cual", "cuales", "busca", "buscar", "noticias", "noticia", "dime", "estan",
-    "the", "of", "and", "in", "to", "for", "is", "on", "that", "by", "this", "with", "i", "you"
-}
-
-
-def clean_text(text: str) -> str:
-    t = re.sub(r"<[^>]+>", " ", text)
-    t = html.unescape(t)
-    t = re.sub(r"\s+", " ", t)
-    return t.strip()
-
-
-def clean_query(q: str) -> str:
-    return q.strip().strip("'\"`").strip()
-
-
-def fetch_wikipedia_search(query: str, lang: str = "es") -> list[dict]:
-    clean_q = clean_query(query)
-    if not clean_q:
-        return []
-    url = (
-        f"https://{lang}.wikipedia.org/w/api.php?action=query"
-        f"&generator=search&gsrsearch={urllib.parse.quote(clean_q)}&gsrlimit=3"
-        f"&prop=extracts&exintro=1&explaintext=1&exlimit=3&format=json"
-    )
-    req = urllib.request.Request(url, headers={"User-Agent": "SOMA-OS-Kernel/2.0 (admin@soma-os.local)"})
-    results = []
+def convert_image_to_bmp(raw_bytes: bytes, max_w: int = 160) -> bytes | None:
     try:
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            data = json.loads(resp.read().decode("utf-8", errors="replace"))
-        pages = data.get("query", {}).get("pages", {})
-        for _, pdata in pages.items():
-            title = pdata.get("title", "")
-            extract = clean_text(pdata.get("extract", ""))
-            if title and extract:
-                sentences = re.split(r'(?<=[.!?])\s+', extract)
-                full_para = " ".join(sentences[:4]).strip()
-                if full_para:
-                    results.append({
-                        "title": f"Wikipedia: {title}",
-                        "snippet": full_para
-                    })
+        from PIL import Image
+        img = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+        w, h = img.size
+        if w > max_w:
+            new_h = max(1, int(h * max_w / w))
+            img = img.resize((max_w, new_h))
+        buf = io.BytesIO()
+        img.save(buf, format="BMP")
+        return buf.getvalue()
     except Exception:
         pass
-    return results
-
-
-def fetch_bing_news_rss(query: str) -> list[dict]:
-    clean_q = clean_query(query)
-    if not clean_q:
-        return []
-    url = f"https://www.bing.com/news/search?q={urllib.parse.quote(clean_q)}&format=rss&setlang=es"
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
-    results = []
     try:
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            xml_data = resp.read().decode("utf-8", errors="replace")
-        root = ET.fromstring(xml_data)
-        for item in root.findall(".//item")[:4]:
-            title = clean_text(item.findtext("title") or "")
-            desc = clean_text(item.findtext("description") or "")
-            if title:
-                snippet = f"{title}. {desc}" if desc and desc != title else title
-                results.append({
-                    "title": f"[Prensa] {title}",
-                    "snippet": snippet
-                })
+        with tempfile.NamedTemporaryFile(suffix=".in", delete=False) as f_in:
+            f_in.write(raw_bytes)
+            in_path = f_in.name
+        out_path = in_path + ".bmp"
+        cmd = ["/usr/bin/sips", "-s", "format", "bmp", "--resampleWidth", str(max_w), in_path, "--out", out_path]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2.5)
+        if res.returncode == 0 and os.path.exists(out_path):
+            with open(out_path, "rb") as f_out: bmp_data = f_out.read()
+            try: os.unlink(in_path)
+            except: pass
+            try: os.unlink(out_path)
+            except: pass
+            return bmp_data
+        try: os.unlink(in_path)
+        except: pass
     except Exception:
         pass
-    return results
+    return None
 
+def clean_html_for_soma(raw_html: str, base_url: str = "") -> str:
+    t = re.sub(r'(?is)<script.*?>.*?</script>', '', raw_html)
+    t = re.sub(r'(?is)<style.*?>.*?</style>', '', t)
+    t = re.sub(r'(?is)<noscript.*?>.*?</noscript>', '', t)
+    t = re.sub(r'(?is)<svg.*?>.*?</svg>', '', t)
+    t = re.sub(r'(?is)<!--.*?-->', '', t)
+    t = re.sub(r'(?is)<div[^>]*?(cookie|consent|banner|overlay|ad-|ads)[^>]*?>.*?</div>', '', t)
 
-def fetch_ddg_lite(query: str) -> list[dict]:
-    clean_q = clean_query(query)
-    if not clean_q:
-        return []
-    url = "https://lite.duckduckgo.com/lite/"
-    data = urllib.parse.urlencode({"q": clean_q, "kl": "es-es"}).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        },
-    )
-    results = []
-    try:
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            content = resp.read().decode("utf-8", errors="replace")
-        links = re.findall(r'<a class=["\']result-link["\'][^>]*>(.*?)</a>', content, re.DOTALL)
-        snippets = re.findall(r'<td class=["\']result-snippet["\'][^>]*>(.*?)</td>', content, re.DOTALL)
-        for i in range(min(len(links), len(snippets), 4)):
-            t = clean_text(links[i])
-            s = clean_text(snippets[i])
-            if t and s:
-                results.append({"title": t, "snippet": s})
-    except Exception:
-        pass
-    return results
+    # Convertir todos los enlaces relativos a absolutos de forma robusta
+    def fix_a_tag(m):
+        tag = m.group(0)
+        href_match = re.search(r'href=["\'](.*?)["\']', tag, re.I)
+        if not href_match: return ""
+        href = href_match.group(1).strip()
+        if href.startswith("javascript:") or href.startswith("mailto:"): return ""
+        if base_url:
+            href = urllib.parse.urljoin(base_url, href)
+        return f'<a href="{href}">'
+    t = re.sub(r'(?is)<a\s+[^>]*>', fix_a_tag, t)
 
+    img_count = [0]
+    def fix_img_tag(m):
+        if img_count[0] >= 2: return ""
+        tag = m.group(0)
+        src_match = (
+            re.search(r'data-src=["\'](.*?)["\']', tag, re.I) or
+            re.search(r'data-original=["\'](.*?)["\']', tag, re.I) or
+            re.search(r'srcset=["\']([^\s,]+)', tag, re.I) or
+            re.search(r'src=["\'](.*?)["\']', tag, re.I)
+        )
+        if not src_match: return ""
+        img_url = src_match.group(1).strip()
+        if base_url: img_url = urllib.parse.urljoin(base_url, img_url)
+        if any(bad in img_url.lower() for bad in [".svg", ".ico", "pixel", "track", "beacon", "emoji", "avatar", "icon", "badge"]): return ""
+        img_count[0] += 1
+        proxy_img_url = f"http://10.0.2.2:8095/img?url={urllib.parse.quote(img_url, safe='')}"
+        return f'<img src="{proxy_img_url}" width="160" height="90">'
 
-def perform_search(query: str) -> str:
-    cleaned = clean_query(query)
-    if not cleaned:
-        return "Consulta vacía."
-
-    raw_tokens = re.findall(r"[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]{3,}", cleaned.lower())
-    query_tokens = [t for t in raw_tokens if t not in STOP_WORDS] or raw_tokens
-
-    # Búsqueda concurrente agnóstica
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        f_wiki = executor.submit(fetch_wikipedia_search, cleaned)
-        f_bing = executor.submit(fetch_bing_news_rss, cleaned)
-        f_ddg = executor.submit(fetch_ddg_lite, cleaned)
-
-        all_res = f_wiki.result() + f_bing.result() + f_ddg.result()
-
-    if not all_res:
-        return f"Sin resultados web para: '{query}'."
-
-    # Ponderación basada en densidad de términos de la consulta
-    def score_item(item: dict) -> float:
-        text = (item["title"] + " " + item["snippet"]).lower()
-        score = 0.0
-        for token in query_tokens:
-            matches = len(re.findall(r'\b' + re.escape(token) + r'\b', text))
-            score += matches * 2.0
-            if token in item["title"].lower():
-                score += 3.0
-        return score
-
-    all_res.sort(key=score_item, reverse=True)
-
-    seen = set()
-    dedup = []
-    for item in all_res:
-        norm = re.sub(r"[^a-zA-Z0-9]", "", item["title"][:40].lower())
-        if norm and norm not in seen:
-            seen.add(norm)
-            dedup.append(item)
-
-    formatted = []
-    for i, it in enumerate(dedup[:4], 1):
-        snip = it["snippet"]
-        if len(snip) > 500:
-            last_dot = snip[:500].rfind(".")
-            if last_dot > 200:
-                snip = snip[:last_dot + 1]
-        formatted.append(f"[{i}] {it['title']}\n    {snip}")
-
-    return "\n\n".join(formatted) if formatted else "Sin resultados relevantes."
-
+    t = re.sub(r'(?is)<img[^>]*?>', fix_img_tag, t)
+    return t
 
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):
-        pass
-
-    def _send(self, code, body, ctype):
+    def log_message(self, fmt, *args): pass
+    def _send(self, code: int, body: bytes, ctype: str):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)
 
@@ -194,21 +106,126 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
-        q = (qs.get("q") or qs.get("query") or [""])[0].strip()
+        q = (qs.get("q") or qs.get("url") or [""])[0].strip()
 
         if path in ("/health", "/"):
             self._send(200, b"ok\n", "text/plain; charset=utf-8")
             return
-        if path not in ("/search", "/ddg"):
-            self._send(404, b"not found\n", "text/plain")
-            return
-        if not q:
-            self._send(400, b"missing q=\n", "text/plain")
+
+        # PARCHE_RED_SEGURO_V1: búsqueda de noticias mediante Google News RSS.
+        if path == "/search":
+            if not q:
+                self._send(400, b"Falta la consulta q", "text/plain; charset=utf-8")
+                return
+            search_url = "https://news.google.com/rss/search?" + urllib.parse.urlencode({
+                "q": q, "hl": "es", "gl": "ES", "ceid": "ES:es"
+            })
+            req = urllib.request.Request(
+                search_url,
+                headers={"User-Agent": USER_AGENT,
+                         "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8"},
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    rss_data = resp.read(512 * 1024 + 1)
+                if len(rss_data) > 512 * 1024:
+                    self._send(502, b"El feed de noticias supera el limite de 512 KiB", "text/plain; charset=utf-8")
+                    return
+                root = ET.fromstring(rss_data)
+                items = root.findall("./channel/item")
+                rows = [f"Resultados de noticias para: {q}", "Fuente: Google News RSS", ""]
+                for index, item in enumerate(items[:6], 1):
+                    def field_text(tag: str) -> str:
+                        node = item.find(tag)
+                        if node is None:
+                            return ""
+                        value = " ".join("".join(node.itertext()).split())
+                        value = html.unescape(re.sub(r"(?is)<[^>]*>", " ", value))
+                        return " ".join(value.split())
+                    title = field_text("title") or "(sin titulo)"
+                    summary = field_text("description")
+                    link = field_text("link")
+                    published = field_text("pubDate")
+                    rows.append(f"{index}. {title[:180]}")
+                    if published:
+                        rows.append(f"Fecha: {published[:80]}")
+                    if link:
+                        rows.append(f"Enlace: {link[:300]}")
+                    if summary:
+                        rows.append(f"Resumen: {summary[:220]}")
+                    rows.append("")
+                if not items:
+                    rows.append("La fuente no devolvio noticias para esta consulta.")
+                body = ("\n".join(rows)).encode("utf-8", errors="replace")
+                self._send(200, body, "text/plain; charset=utf-8")
+            except Exception as exc:
+                message = f"No se pudo consultar Google News RSS: {exc}"
+                self._send(502, message.encode("utf-8", errors="replace"), "text/plain; charset=utf-8")
             return
 
-        text = perform_search(q) + "\n"
-        self._send(200, text.encode("utf-8"), "text/plain; charset=utf-8")
+        # PARCHE_RED_SEGURO_V1: proxy HTTP(S) transparente para el curl del kernel.
+        if path == "/fetch":
+            if not q:
+                self._send(400, b"Falta url", "text/plain; charset=utf-8")
+                return
+            target_info = urllib.parse.urlparse(q)
+            if target_info.scheme not in ("http", "https") or not target_info.netloc:
+                self._send(400, b"URL no valida: solo se permite http:// o https://", "text/plain; charset=utf-8")
+                return
+            req = urllib.request.Request(
+                q,
+                headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
+            )
+            try:
+                # El buffer HTTP del kernel para curl es de 4096 bytes. Limitar
+                # el cuerpo evita que el proxy intente enviar grandes RSS/HTML
+                # cuando el cliente SOMA cierra al llenar su propio buffer.
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    content_type = resp.headers.get_content_type()
+                    payload = resp.read(3073)
+                if len(payload) > 3072:
+                    payload = payload[:2780] + b"\n...[respuesta truncada: limite de salida de SOMA]...\n"
+                self._send(200, payload, content_type)
+            except Exception as exc:
+                message = f"Error al descargar URL externa: {exc}"
+                self._send(502, message.encode("utf-8", errors="replace"), "text/plain; charset=utf-8")
+            return
 
+        if path in ("/img", "/image"):
+            if not q: self._send(400, b"Falta url", "text/plain"); return
+            if q in IMG_CACHE: self._send(200, IMG_CACHE[q], "image/bmp"); return
+            parsed_target = urllib.parse.urlparse(q)
+            referer = f"{parsed_target.scheme}://{parsed_target.netloc}/"
+            req = urllib.request.Request(q, headers={"User-Agent": USER_AGENT, "Referer": referer, "Accept": "image/*,*/*;q=0.8"})
+            try:
+                with urllib.request.urlopen(req, timeout=4) as resp: raw_img = resp.read()
+                bmp_data = convert_image_to_bmp(raw_img, max_w=160)
+                if bmp_data:
+                    IMG_CACHE[q] = bmp_data
+                    self._send(200, bmp_data, "image/bmp")
+                    return
+            except Exception: pass
+            self._send(404, b"Imagen no disponible", "text/plain")
+            return
+
+        if path in ("/web", "/proxy"):
+            if not q: self._send(400, b"Falta url", "text/plain"); return
+            target = q
+            if not target.startswith("http://") and not target.startswith("https://"): target = "https://" + target
+            req = urllib.request.Request(target, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    raw_data = resp.read()
+                    charset = resp.headers.get_content_charset() or "utf-8"
+                    html_text = raw_data.decode(charset, errors="replace")
+                clean_doc = clean_html_for_soma(html_text, target)
+                encoded = clean_doc.encode("utf-8", errors="replace")
+                self._send(200, encoded, "text/html; charset=utf-8")
+            except Exception as e:
+                err_msg = f"<!DOCTYPE html><html><body><h1>Error Gateway</h1><p>{html.escape(str(e))}</p></body></html>"
+                self._send(502, err_msg.encode("utf-8"), "text/html; charset=utf-8")
+            return
+        self._send(404, b"not found\n", "text/plain")
 
 def start_background(host: str = "0.0.0.0", port: int = 8095) -> bool:
     global _proxy_server
@@ -217,47 +234,26 @@ def start_background(host: str = "0.0.0.0", port: int = 8095) -> bool:
         t = threading.Thread(target=httpd.serve_forever, daemon=True, name="SearchProxyThread")
         t.start()
         _proxy_server = httpd
+        print(f"[GATEWAY] Proxy multimedia activo en puerto {port}")
         return True
     except Exception as e:
-        print(f"[SEARCH] AVISO: No se pudo iniciar proxy en {host}:{port} -> {e}")
+        print(f"[GATEWAY] AVISO: {e}")
         return False
 
-
 def add_arguments(ap) -> None:
-    ap.add_argument("--sin-busqueda", "--sin-proxy", action="store_true",
-                    dest="sin_busqueda", help="no iniciar el proxy de busqueda web integrado")
-    ap.add_argument("--proxy-port", type=int, default=8095,
-                    help="puerto para el proxy de busqueda web (por defecto 8095)")
-
+    ap.add_argument("--sin-busqueda", action="store_true", dest="sin_busqueda")
+    ap.add_argument("--proxy-port", type=int, default=8095)
 
 def ensure_proxy(args=None) -> None:
     port = getattr(args, "proxy_port", 8095) if args else 8095
-    if getattr(args, "sin_busqueda", False):
-        return
-
+    if getattr(args, "sin_busqueda", False): return
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=0.8) as r:
-            if r.status == 200:
-                return
-    except Exception:
-        pass
-
+            if r.status == 200: return
+    except Exception: pass
     start_background("0.0.0.0", port)
 
-
-def main():
-    ap = argparse.ArgumentParser(description="Proxy de búsqueda agnóstico para SOMA")
-    ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--port", type=int, default=8095)
-    args = ap.parse_args()
-    httpd = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"[search_proxy] Activo en http://{args.host}:{args.port}")
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    return 0
-
-
 if __name__ == "__main__":
-    raise SystemExit(main())
+    httpd = ThreadingHTTPServer(("0.0.0.0", 8095), Handler)
+    print("[search_proxy] Gateway activo en puerto 8095")
+    httpd.serve_forever()
