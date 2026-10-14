@@ -4,7 +4,6 @@
 #include "mouse.h"
 #include "httpd.h"
 #include "shell.h"
-#include "lang.h"
 #include "console.h"
 #include "fs.h"
 #include "mem.h"
@@ -3000,10 +2999,7 @@ static int cmd_uniq(const char *args, char *out_buf, uint32_t max_out)
 }
 
 static const struct command_entry cmd_table[] = {
-    /* Scripting y Automatizacion (SOMA-LANG) */
-    { "vm",           cmd_lang_vm,      CMD_F_SAFE,   "Test y estado de la maquina virtual SOMA-VM" },
-    { "coder",        cmd_lang_coder,   CMD_F_SAFE,   "Agente programador autonomo SOMA" },
-    { "run",          cmd_lang_run,     CMD_F_SAFE,   "Ejecuta un script o tokeniza codigo .soma" },
+    /* Scripting y Automatización */
     { "history",       cmd_history,      CMD_F_SAFE,   "Muestra el historial persistente de comandos" },
     { "source",       cmd_source,       CMD_F_SAFE,   "Ejecuta un script de comandos por lotes (.sh)" },
     { "sh",           cmd_source,       CMD_F_ALIAS,  "Alias de source" },
